@@ -3,5 +3,6 @@ gpiozero==2.0.1
 lgpio>=0.2
 loguru>=0.7
 pyserial==3.5
+PyYAML>=6.0
 requests>=2.31.0
 RPi.GPIO>=0.7.1

@@ -1,11 +1,9 @@
-import logging
 import threading
 import uuid
 from collections.abc import Callable
+from loguru import logger
 from types import TracebackType
 from typing import Self, Type
-
-logger = logging.getLogger(__name__)
 
 class LevelHandler:
     """

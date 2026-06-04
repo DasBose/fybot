@@ -11,7 +11,7 @@ class IntegerParameter:
         self.name = name
         self.min_value = min_value
         self.max_value = max_value
-        self.value = default_value
+        self.set_value(default_value)
 
     def set_value(self, value: int):
         if value < self.min_value or value > self.max_value:
@@ -26,7 +26,7 @@ class BooleanParameter:
 
     def __init__(self, name: str, default_value: bool):
         self.name = name
-        self.value = default_value
+        self.set_value(default_value)
 
     def set_value(self, value: bool):
         self.value = value
@@ -40,12 +40,27 @@ class EnumParameter:
     def __init__(self, name: str, values: List[str], default_value: str):
         self.name = name
         self.values = set(values)
-        self.value = default_value
+        self.set_value(default_value)
 
     def set_value(self, value: str):
         if value not in self.values:
             raise ValueError(f"Invalid value {value} for parameter {self.name}")
         self.value = value
+
+    def get_value(self) -> str:
+        return self.value
+
+class StringParameter:
+    """Configurable string value."""
+
+    def __init__(self, name: str, default_value: str):
+        self.name = name
+        self.set_value(default_value)
+
+    def set_value(self, value: str):
+        if value is None or value == "":
+            raise ValueError(f"Invalid value {value} for parameter {self.name}")
+        self.value = str(value)
 
     def get_value(self) -> str:
         return self.value
@@ -57,7 +72,7 @@ class RangeParameter:
         self.name = name
         self.min_value = min_value
         self.max_value = max_value
-        self.value = default_value
+        self.set_value(default_value)
 
     def set_value(self, value: Tuple[int, int]):
         if value[0] < self.min_value or value[0] > self.max_value or value[1] < self.min_value or value[1] > self.max_value:

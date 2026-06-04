@@ -1,20 +1,22 @@
 import random
 import threading
 from functools import partial
+from pathlib import Path
 from time import time
 
+import yaml
 from loguru import logger
 
 from handlers.boolean_handler import BooleanHandler
 from handlers.button_handler import ButtonHandler
 from handlers.level_handler import LevelHandler
-from local_config import FY_DEVICE_NAME, FY_PASSWORD, FY_USER
 from outputs.pumps.pump_HR8825 import PumpHR8825
 from outputs.tens.tens_et312 import TensET312
 from program_elements.fy_mercy_punish import FYMercyPunish
 from program_elements.program import (
     BooleanParameter,
     EnumParameter,
+    StringParameter,
     IntegerParameter,
     Program,
     RangeParameter,
@@ -22,10 +24,16 @@ from program_elements.program import (
 from program_elements.random_pulsed_tens import RandomPulsedTens
 from program_elements.random_solid_tens import RandomSolidTens
 
-FYAUX2 = 5
-FYAUX1 = 8
-BUTTON_2 = 10
-BUTTON_1 = 14
+_ROOT = Path(__file__).resolve().parents[1]
+_local_config = yaml.safe_load((_ROOT / "local_config.yaml").read_text(encoding="utf-8"))
+FY_USER = _local_config["FY_USER"]
+FY_PASSWORD = _local_config["FY_PASSWORD"]
+FY_DEVICE_NAME = _local_config["FY_DEVICE_NAME"]
+
+FYAUX1 = 14
+FYAUX2 = 10
+BUTTON_1 = 8
+BUTTON_2 = 5
 
 class RiskyMercy(Program):
     """
@@ -40,6 +48,9 @@ class RiskyMercy(Program):
     PARAMETERS = {
         "speed_range": RangeParameter(name="FY speed range for random patterns (%)", min_value=1, max_value=100, default_value=(50, 100)),
         "duration_range": RangeParameter(name="FY duration range for random patterns (seconds)", min_value=15, max_value=3600, default_value=(15, 60)),
+        "mercy_pattern": StringParameter(name="Mercy mode pattern", default_value="Mercy"),
+        "penalty_pattern": StringParameter(name="Penalty mode pattern", default_value="Penalty"),
+        "punish_pattern": StringParameter(name="Punishment mode pattern", default_value="Penalty"),
         "base_punishment_risk": IntegerParameter(name="Base punishment risk (%)", min_value=0, max_value=100, default_value=20),
         "mercy_cooldown": IntegerParameter(name="Mercy cooldown (seconds)", min_value=1, max_value=3600, default_value=480),
         "mercy_gradual_cooldown": BooleanParameter(name="Mercy gradual cooldown", default_value=True),
@@ -133,9 +144,9 @@ class RiskyMercy(Program):
                 user=FY_USER,
                 password=FY_PASSWORD,
                 device_name=FY_DEVICE_NAME,
-                mercy_mode="Mercy",
-                penalty_mode="Penalty",
-                punish_mode="Penalty",
+                mercy_mode=self.get_parameter("mercy_pattern"),
+                penalty_mode=self.get_parameter("penalty_pattern"),
+                punish_mode=self.get_parameter("punish_pattern"),
                 speed_range=self.get_parameter("speed_range"),
                 duration_range=self.get_parameter("duration_range"),
                 mercy_mode_callback=mercy_callback,

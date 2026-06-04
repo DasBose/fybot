@@ -6,6 +6,7 @@ from program_elements.program import (
     IntegerParameter,
     Program,
     RangeParameter,
+    StringParameter,
 )
 
 
@@ -16,6 +17,7 @@ class StubProgram(Program):
         "enabled": BooleanParameter("enabled", True),
         "mode": EnumParameter("mode", ["a", "b"], "a"),
         "span": RangeParameter("span", 0, 100, (10, 20)),
+        "name": StringParameter("name", "default"),
     }
 
     def __init__(self) -> None:
@@ -44,6 +46,27 @@ class TestIntegerParameter:
         param = IntegerParameter("x", 1, 10, 5)
         with pytest.raises(ValueError, match="out of range"):
             param.set_value(11)
+
+
+class TestStringParameter:
+    def test_get_default(self) -> None:
+        param = StringParameter("name", "default")
+        assert param.get_value() == "default"
+
+    def test_set_valid_value(self) -> None:
+        param = StringParameter("name", "default")
+        param.set_value("non-default")
+        assert param.get_value() == "non-default"
+
+    def test_set_none_raises(self) -> None:
+        param = StringParameter("name", "default")
+        with pytest.raises(ValueError, match="Invalid value"):
+            param.set_value(None)
+
+    def test_set_empty_string_raises(self) -> None:
+        param = StringParameter("name", "default")
+        with pytest.raises(ValueError, match="Invalid value"):
+            param.set_value("")
 
 
 class TestBooleanParameter:

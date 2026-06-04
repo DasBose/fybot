@@ -1,4 +1,4 @@
-local_config.py
+local_config.yaml
 
 # Python
 __pycache__/
