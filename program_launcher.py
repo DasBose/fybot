@@ -28,6 +28,7 @@ from program_elements.program import (  # noqa: E402
     IntegerParameter,
     Program,
     RangeParameter,
+    StringParameter,
 )
 
 
@@ -71,8 +72,9 @@ class ProgramLauncher(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("FYBot Program Launcher")
-        self.geometry("520x640")
+        self.attributes("-zoomed", True)
         self.minsize(420, 480)
+        self.bind("<Escape>", lambda _event: self.destroy())
 
         self.program_classes = discover_programs(PROGRAMS_DIR)
         self.program_instance: Program | None = None
@@ -258,6 +260,12 @@ class ProgramLauncher(tk.Tk):
             )
             widget.grid(row=row, column=1, sticky="w", pady=4)
             self.param_widgets[key] = {"type": "enum", "var": var}
+        
+        elif isinstance(param, StringParameter):
+            var = tk.StringVar(value=param.get_value())
+            widget = ttk.Entry(self.param_frame, textvariable=var, width=18)
+            widget.grid(row=row, column=1, sticky="w", pady=4)
+            self.param_widgets[key] = {"type": "string", "var": var}
 
         elif isinstance(param, RangeParameter):
             low, high = param.get_value()
