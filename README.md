@@ -2,7 +2,11 @@
 Automation and accessory handling for the Fuck Yeah machine.
 
 ## To use
+Note: On a fresh Raspberry Pi, you may need to run `apt install swig lgpio python3-gpiozero` before running this program.
+
 On a Raspberry Pi with a screen and input device, run ./launcher.sh to bring up the program selector and configurer. Make sure you have the equipment and connections installed for the program of your choice.
+
+It can also be run from the command line as ./cli.sh (or ./cli_launcher.py if you are already in the venv). The CLI runner can take a YAML file as config settings, or generate a config file using the program defaults.
 
 ## To add your own programs
 In the programs/ directory, add a new class that inherits from program_elements.program.Program. Fill out the PARAMETERS variable with configurable inputs, and implement the run() method, using the handlers, program_elements, and outputs as building blocks. Your program should look for self.main_stop_event as a shutdown signal, or override stop() to provide a different signal. Look at risky_mercy.pl as an example program that uses all of the building blocks so far.

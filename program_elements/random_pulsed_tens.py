@@ -1,5 +1,6 @@
 import random
 import threading
+import uuid
 from typing import List, Tuple
 
 from loguru import logger
@@ -15,11 +16,12 @@ class RandomPulsedTens:
     def __init__(self, level_handlers: List[LevelHandler]):
         self.level_handlers = level_handlers
         self.level_range = (1, 99)
-        self.setting_id = "random_pulsed_tens"
+        self.setting_id = f"random_pulsed_tens_{uuid.uuid4().hex}"
         self.on_duration = (1, 10)
         self.off_duration = (1, 10)
         self._stop = threading.Event()
         self._threads: List[threading.Thread] = []
+        self.offset = 0
 
     def set_range(self, range: Tuple[int, int]):
         self.level_range = range
@@ -30,12 +32,18 @@ class RandomPulsedTens:
     def set_off_duration(self, range: Tuple[int, int]):
         self.off_duration = range
 
+    def set_offset(self, offset: int):
+        self.offset = offset
+
     def _sleep(self, duration: float) -> bool:
         return self._stop.wait(timeout=duration)
 
     def _loop(self, level_handler: LevelHandler) -> None:
         while not self._stop.is_set():
-            level = random.randint(self.level_range[0], self.level_range[1])
+            level = min(
+                127,
+                max(0, random.randint(self.level_range[0], self.level_range[1]) + self.offset),
+            )
             on_time = random.uniform(self.on_duration[0], self.on_duration[1])
             safety_duration = max(self.on_duration) + 1
             level_handler.set_id(level, safety_duration, self.setting_id)

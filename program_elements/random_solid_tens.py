@@ -1,4 +1,5 @@
 import random
+import uuid
 from typing import List, Tuple
 
 from handlers.level_handler import LevelHandler
@@ -14,16 +15,24 @@ class RandomSolidTens:
         self.level_handlers = level_handlers
         self.max_duration = max_duration
         self.level_range = (1, 99)
-        self.setting_id = "random_solid_tens"
+        self.setting_id = f"random_solid_tens_{uuid.uuid4().hex}"
+        self.offset = 0
 
     def set_range(self, range: Tuple[int, int]):
         self.level_range = range
+
+    def set_offset(self, offset: int):
+        self.offset = offset
 
     def on(self, duration: int = None) -> None:
         if duration is None:
             duration = self.max_duration
         for level_handler in self.level_handlers:
-            level_handler.set_id(random.randint(self.level_range[0], self.level_range[1]), duration, self.setting_id)
+            level = min(
+                127,
+                max(0, random.randint(self.level_range[0], self.level_range[1]) + self.offset),
+            )
+            level_handler.set_id(level, duration, self.setting_id)
 
     def off(self) -> None:
         for level_handler in self.level_handlers:

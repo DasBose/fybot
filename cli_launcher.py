@@ -78,6 +78,23 @@ def apply_config(program: Program, path: Path) -> None:
             raise ValueError(f"Invalid value for parameter {key}: {exc}") from exc
 
 
+def generate_config(program_class: type[Program], path: Path) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(f"Could not create directory {path.parent}: {exc}") from exc
+
+    data = {}
+    for key, param in program_class.PARAMETERS.items():
+        data[key] = param.get_value()
+        if isinstance(data[key], tuple):
+            data[key] = list(data[key])
+    try:
+        path.write_text(yaml.dump(data, indent=4, sort_keys=False), encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Could not write {path}: {exc}") from exc
+
+
 def main() -> None:
     programs = discover_programs(PROGRAMS_DIR)
     if not programs:
@@ -100,9 +117,20 @@ def main() -> None:
         metavar="FILE",
         help="YAML file with parameter values for the selected program",
     )
+    parser.add_argument(
+        "--generate-config",
+        type=Path,
+        metavar="FILE",
+        help="Generate a default config file for the selected program",
+    )
     args = parser.parse_args()
 
     program_class = programs[args.program]
+
+    if args.generate_config:
+        generate_config(program_class, args.generate_config)
+        sys.exit(0)
+
     program = program_class()
 
     if args.config:
@@ -113,8 +141,9 @@ def main() -> None:
             sys.exit(1)
 
     try:
-        program.run()
+        program.start()
     except KeyboardInterrupt:
+        print("Keyboard interrupt, stopping...", file=sys.stderr)
         program.stop()
         print("Stopped.", file=sys.stderr)
         sys.exit(130)

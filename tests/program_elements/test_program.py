@@ -1,12 +1,15 @@
 import pytest
 
 from program_elements.program import (
+    BooleanOutput,
     BooleanParameter,
+    DigitalInput,
     EnumParameter,
     IntegerParameter,
     Program,
     RangeParameter,
     StringParameter,
+    VariableOutput,
 )
 
 
@@ -121,3 +124,65 @@ class TestProgram:
         assert program.get_parameter("enabled") is False
         assert program.get_parameter("mode") == "b"
         assert program.get_parameter("span") == (1, 2)
+
+
+class TestBooleanOutput:
+    def test_set_and_get(self) -> None:
+        seen: list[bool] = []
+        output = BooleanOutput("pump", set_fn=seen.append)
+        output.set_value(True)
+        assert output.get_value() is True
+        assert seen == [True]
+        output.set_value(False)
+        assert output.get_value() is False
+        assert seen == [True, False]
+
+    def test_get_fn_override(self) -> None:
+        output = BooleanOutput(
+            "pump",
+            set_fn=lambda _v: None,
+            get_fn=lambda: True,
+        )
+        output.set_value(False)
+        assert output.get_value() is True
+
+
+class TestVariableOutput:
+    def test_set_and_get(self) -> None:
+        seen: list[int] = []
+        output = VariableOutput("level", 0, 127, set_fn=seen.append)
+        output.set_value(40)
+        assert output.get_value() == 40
+        assert seen == [40]
+
+    def test_out_of_range_raises(self) -> None:
+        output = VariableOutput("level", 0, 127, set_fn=lambda _v: None)
+        with pytest.raises(ValueError, match="out of range"):
+            output.set_value(200)
+
+
+class TestDigitalInput:
+    def test_get_value(self) -> None:
+        inp = DigitalInput("btn", get_fn=lambda: True)
+        assert inp.get_value() is True
+
+
+class TestProgramIoTest:
+    def test_default_io_test_sets_ready_and_waits(self) -> None:
+        program = StubProgram()
+
+        def stop_soon() -> None:
+            assert program.io_ready.wait(timeout=1.0)
+            program.stop()
+
+        import threading
+
+        stopper = threading.Thread(target=stop_soon)
+        stopper.start()
+        program.start_io_test()
+        stopper.join(timeout=2.0)
+        assert not program.io_ready.is_set()
+        assert program.boolean_outputs == {}
+        assert program.variable_outputs == {}
+        assert program.inputs == {}
+

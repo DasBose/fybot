@@ -14,12 +14,15 @@ from outputs.pumps.pump_HR8825 import PumpHR8825
 from outputs.tens.tens_et312 import TensET312
 from program_elements.fy_mercy_punish import FYMercyPunish
 from program_elements.program import (
+    BooleanOutput,
     BooleanParameter,
+    DigitalInput,
     EnumParameter,
     StringParameter,
     IntegerParameter,
     Program,
     RangeParameter,
+    VariableOutput,
 )
 from program_elements.random_pulsed_tens import RandomPulsedTens
 from program_elements.random_solid_tens import RandomSolidTens
@@ -59,7 +62,7 @@ class RiskyMercy(Program):
         "mercy_penalty_multiplier": IntegerParameter(name="Mercy penalty multiplier", min_value=1, max_value=10, default_value=1),
         "punishment_duration": IntegerParameter(name="Punishment duration (seconds)", min_value=15, max_value=3600, default_value=120),
         "pulsed_tens_channel": EnumParameter(name="Pulsed tens channel", values=["A", "B", "Both", "None"], default_value="A"),
-        "aux_tens_channel": EnumParameter(name="Aux-driven tens channel", values=["A", "B", "Both", "None"], default_value="A"),
+        "aux_tens_channel": EnumParameter(name="Aux-driven tens channel", values=["A", "B", "Both", "None"], default_value="Both"),
         "default_pulsed_tens_range": RangeParameter(name="Default pulsed tens range (1-127)", min_value=1, max_value=127, default_value=(50, 80)),
         "default_aux_tens_range": RangeParameter(name="Default aux-driven tens range (1-127)", min_value=1, max_value=127, default_value=(60, 90)),
         "penalty_pulsed_tens_range": RangeParameter(name="Penalty pulsed tens range (1-127)", min_value=1, max_value=127, default_value=(70, 90)),
@@ -71,15 +74,79 @@ class RiskyMercy(Program):
         "punishment_pulsed_tens_on_duration": RangeParameter(name="Punishment pulsed tens on duration (seconds)", min_value=1, max_value=15, default_value=(2, 6)),
         "punishment_pulsed_tens_off_duration": RangeParameter(name="Punishment pulsed tens off duration (seconds)", min_value=1, max_value=15, default_value=(1, 3)),
         "mercy_lube_pump_duration": IntegerParameter(name="Lube pump duration on mercy (seconds)", min_value=1, max_value=3600, default_value=15),
-        "random_lube_pump_duration": IntegerParameter(name="Lube pump duration on change of random mode (seconds)", min_value=0, max_value=3600, default_value=2),
+        "random_lube_pump_duration": IntegerParameter(name="Lube pump duration on change of random mode (seconds)", min_value=0, max_value=3600, default_value=3),
         "punishment_hot_sauce_pump_duration": IntegerParameter(name="Hot sauce pump duration on punishment (seconds)", min_value=0, max_value=3600, default_value=20),
         "random_shock_length_range": RangeParameter(name="Shock length range on change of random mode (seconds)", min_value=0, max_value=15, default_value=(1, 8)),
+        "progressive_tens_offset_normal_increment": IntegerParameter(name="Progressive tens mode switch increment (1-10)", min_value=1, max_value=10, default_value=2),
+        "progressive_tens_offset_punishment_increment": IntegerParameter(name="Progressive tens punishment increment (1-10)", min_value=1, max_value=10, default_value=8),
     }
 
     def __init__(self):
         super().__init__()
 
+    def io_test(self) -> None:
+        from gpiozero import Button
+
+        with (
+            PumpHR8825("A") as lube_pump,
+            PumpHR8825("B") as hot_sauce_pump,
+            TensET312() as tens_unit,
+        ):
+            aux1 = aux2 = button1 = button2 = None
+            try:
+                aux1 = Button(FYAUX1, bounce_time=0.05)
+                aux2 = Button(FYAUX2, bounce_time=0.05)
+                button1 = Button(BUTTON_1, bounce_time=0.05)
+                button2 = Button(BUTTON_2, bounce_time=0.05)
+                self.boolean_outputs = {
+                    "lube_pump": BooleanOutput(
+                        "Lube pump",
+                        set_fn=lambda on: lube_pump.run() if on else lube_pump.stop(),
+                    ),
+                    "hot_sauce_pump": BooleanOutput(
+                        "Hot sauce pump",
+                        set_fn=lambda on: (
+                            hot_sauce_pump.run() if on else hot_sauce_pump.stop()
+                        ),
+                    ),
+                }
+                self.variable_outputs = {
+                    "tens_a": VariableOutput(
+                        "TENS A",
+                        min_value=0,
+                        max_value=127,
+                        set_fn=partial(tens_unit.set, "a"),
+                    ),
+                    "tens_b": VariableOutput(
+                        "TENS B",
+                        min_value=0,
+                        max_value=127,
+                        set_fn=partial(tens_unit.set, "b"),
+                    ),
+                }
+                self.inputs = {
+                    "fy_aux1": DigitalInput("FY AUX1", lambda: aux1.is_pressed),
+                    "fy_aux2": DigitalInput("FY AUX2", lambda: aux2.is_pressed),
+                    "button_1": DigitalInput("Button 1", lambda: button1.is_pressed),
+                    "button_2": DigitalInput("Button 2", lambda: button2.is_pressed),
+                }
+                self.io_ready.set()
+                logger.info("IO test ready")
+                self.main_stop_event.wait()
+            except KeyboardInterrupt:
+                logger.info("Keyboard interrupt, exiting IO test...")
+            finally:
+                self.clear_io()
+                lube_pump.stop()
+                hot_sauce_pump.stop()
+                tens_unit.set("a", 0)
+                tens_unit.set("b", 0)
+                for btn in (aux1, aux2, button1, button2):
+                    if btn is not None:
+                        btn.close()
+
     def run(self) -> None:
+        progressive_tens_offset = 0
         with (
             PumpHR8825("A") as lube_pump,
             PumpHR8825("B") as hot_sauce_pump,
@@ -91,51 +158,74 @@ class RiskyMercy(Program):
         ):
             if self.get_parameter("pulsed_tens_channel") == "A":
                 random_pulsed_tens = RandomPulsedTens([tens_handler_a])
+                random_solid_tens = RandomSolidTens([tens_handler_a])
             elif self.get_parameter("pulsed_tens_channel") == "B":
                 random_pulsed_tens = RandomPulsedTens([tens_handler_b])
+                random_solid_tens = RandomSolidTens([tens_handler_b])
             elif self.get_parameter("pulsed_tens_channel") == "Both":
                 random_pulsed_tens = RandomPulsedTens([tens_handler_a, tens_handler_b])
-            else:
-                random_pulsed_tens = RandomPulsedTens([])
-            if self.get_parameter("aux_tens_channel") == "A":
-                random_solid_tens = RandomSolidTens([tens_handler_a])
-            elif self.get_parameter("aux_tens_channel") == "B":
-                random_solid_tens = RandomSolidTens([tens_handler_b])
-            elif self.get_parameter("aux_tens_channel") == "Both":
                 random_solid_tens = RandomSolidTens([tens_handler_a, tens_handler_b])
             else:
+                random_pulsed_tens = RandomPulsedTens([])
                 random_solid_tens = RandomSolidTens([])
-            random_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
+            if self.get_parameter("aux_tens_channel") == "A":
+                aux_driven_solid_tens = RandomSolidTens([tens_handler_a])
+            elif self.get_parameter("aux_tens_channel") == "B":
+                aux_driven_solid_tens = RandomSolidTens([tens_handler_b])
+            elif self.get_parameter("aux_tens_channel") == "Both":
+                aux_driven_solid_tens = RandomSolidTens([tens_handler_a, tens_handler_b])
+            else:
+                aux_driven_solid_tens = RandomSolidTens([])
+            aux_driven_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
+            random_solid_tens.set_range(self.get_parameter("default_pulsed_tens_range"))
             
             def mercy_callback() -> None:
+                nonlocal progressive_tens_offset
                 random_pulsed_tens.set_range(self.get_parameter("default_pulsed_tens_range"))
-                random_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
+                aux_driven_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
                 random_pulsed_tens.off()
                 random_solid_tens.off()
+                aux_driven_solid_tens.off()
                 lube_pump_handler.set(self.get_parameter("mercy_lube_pump_duration"))
+                progressive_tens_offset = 0
+                aux_driven_solid_tens.set_offset(progressive_tens_offset)
+                random_pulsed_tens.set_offset(progressive_tens_offset)
+                random_solid_tens.set_offset(progressive_tens_offset)
 
             def penalty_callback() -> None:
                 random_pulsed_tens.set_range(self.get_parameter("penalty_pulsed_tens_range"))
                 random_pulsed_tens.set_on_duration(self.get_parameter("penalty_pulsed_tens_on_duration"))
                 random_pulsed_tens.set_off_duration(self.get_parameter("penalty_pulsed_tens_off_duration"))
                 random_pulsed_tens.on()
-                random_solid_tens.set_range(self.get_parameter("penalty_aux_tens_range"))
+                aux_driven_solid_tens.set_range(self.get_parameter("penalty_aux_tens_range"))
             
             def punish_callback() -> None:
+                nonlocal progressive_tens_offset
+                progressive_tens_offset += self.get_parameter("progressive_tens_offset_punishment_increment")
+                aux_driven_solid_tens.set_offset(progressive_tens_offset)
+                random_pulsed_tens.set_offset(progressive_tens_offset)
+                random_solid_tens.set_offset(progressive_tens_offset)
                 hot_sauce_pump_handler.set(self.get_parameter("punishment_hot_sauce_pump_duration"))
                 random_pulsed_tens.set_range(self.get_parameter("punishment_pulsed_tens_range"))
                 random_pulsed_tens.set_on_duration(self.get_parameter("punishment_pulsed_tens_on_duration"))
                 random_pulsed_tens.set_off_duration(self.get_parameter("punishment_pulsed_tens_off_duration"))
                 random_pulsed_tens.on()
-                random_solid_tens.set_range(self.get_parameter("punishment_aux_tens_range"))
+                aux_driven_solid_tens.set_range(self.get_parameter("punishment_aux_tens_range"))
             
             def normal_callback() -> None:
                 random_pulsed_tens.off()
                 random_solid_tens.off()
+                aux_driven_solid_tens.off()
                 random_pulsed_tens.set_range(self.get_parameter("default_pulsed_tens_range"))
-                random_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
+                random_solid_tens.set_range(self.get_parameter("default_pulsed_tens_range"))
+                aux_driven_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
             
             def random_callback() -> None:
+                nonlocal progressive_tens_offset
+                progressive_tens_offset += self.get_parameter("progressive_tens_offset_normal_increment")
+                aux_driven_solid_tens.set_offset(progressive_tens_offset)
+                random_pulsed_tens.set_offset(progressive_tens_offset)
+                random_solid_tens.set_offset(progressive_tens_offset)
                 shock_length = random.randint(self.get_parameter("random_shock_length_range")[0], self.get_parameter("random_shock_length_range")[1])
                 lube_pump_handler.set(self.get_parameter("random_lube_pump_duration"))
                 random_solid_tens.on(shock_length + 1)
@@ -218,13 +308,14 @@ class RiskyMercy(Program):
                     fy_mercy_punish.stop()
                     random_pulsed_tens.off()
                     random_solid_tens.off()
+                    aux_driven_solid_tens.off()
                     lube_pump_handler.unset_all()
                     hot_sauce_pump_handler.unset_all()
             
 
             with (
                 ButtonHandler(FYAUX1, partial(lube_pump_handler.set_id, 60, "aux1"), partial(lube_pump_handler.unset, "aux1")),
-                ButtonHandler(FYAUX2, random_solid_tens.on, random_solid_tens.off),
+                ButtonHandler(FYAUX2, aux_driven_solid_tens.on, aux_driven_solid_tens.off),
                 ButtonHandler(BUTTON_2, request_mercy, lambda: None),
                 ButtonHandler(BUTTON_1, on_start_pressed, lambda: None),
             ):
@@ -232,9 +323,11 @@ class RiskyMercy(Program):
                     logger.info("Waiting for start button (GPIO 14)...")
                     self.main_stop_event.wait()
                 except KeyboardInterrupt:
-                    logger.info("Exiting...")
+                    logger.info("Keyboard interrupt, exiting...")
+                finally:
                     fy_mercy_punish.stop()
                     random_pulsed_tens.off()
                     random_solid_tens.off()
+                    aux_driven_solid_tens.off()
                     lube_pump_handler.unset_all()
                     hot_sauce_pump_handler.unset_all()

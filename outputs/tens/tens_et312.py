@@ -1,4 +1,5 @@
 import fcntl
+import threading
 import time
 from loguru import logger
 from types import TracebackType
@@ -19,62 +20,66 @@ class TensET312:
     """
 
     def __init__(self, port_str: str = "/dev/ttyUSB0"):
-        connected = False
-        for _ in range(10):
-            try:
-                self.conn = et312.ET312SerialSync(port_str)
-                if self.conn.port.isOpen():
-                    fcntl.flock(self.conn.port.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    connected = True
-                    break
-            except Exception as e:
-                logger.exception("ET-312: Failed to connect, retrying...")
-                time.sleep(.2)
-        
-        if not connected:
-            raise Exception("ET-312: Failed to connect")
-        
-        try:
-            self.conn.perform_handshake()
-            # Unused location that gets written
-            arewerunning = self._read(RUNNING_FLAG)
-            
-            if (arewerunning != 42):
-                logger.info("ET-312: Not running, provisioning...")
-                # so let's get it into a blank empty mode. easiest way is calltable 18
-                self._write(0x4078, [0x90]) # mode 90 doesn't exist
-                self._write(0x4070, [18]) # execute mode 90
-                self._wait_ready(0x4070)
+        self._lock = threading.Lock()
+        self.conn = None
 
-                # Overwrite name of current mode with spaces, then display "FYBot"
-                self._write(0x4180, [0x64])
-                self._write(0x4070, [0x15])
-                self._wait_ready(0x4070)
-                for pos, char in enumerate('FYBot'):
-                    self._write(0x4180, [ord(char),pos+9])
-                    self._write(0x4070, [0x13])
+        with self._lock:
+            connected = False
+            for _ in range(10):
+                try:
+                    self.conn = et312.ET312SerialSync(port_str)
+                    if self.conn.port.isOpen():
+                        fcntl.flock(self.conn.port.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        connected = True
+                        break
+                except Exception as e:
+                    logger.exception("ET-312: Failed to connect, retrying...")
+                    time.sleep(.2)
+            
+            if not connected:
+                raise Exception("ET-312: Failed to connect")
+            
+            try:
+                self.conn.perform_handshake()
+                # Unused location that gets written
+                arewerunning = self._read(RUNNING_FLAG)
+                
+                if (arewerunning != 42):
+                    logger.info("ET-312: Not running, provisioning...")
+                    # so let's get it into a blank empty mode. easiest way is calltable 18
+                    self._write(0x4078, [0x90]) # mode 90 doesn't exist
+                    self._write(0x4070, [18]) # execute mode 90
                     self._wait_ready(0x4070)
 
-                for base in [A_BASE, B_BASE]:
-                    self._write(base+0xa8, [0,0]) # don't increment channel intensity
-                    self._write(base+0xa5, [128]) # intensity mod value = min
-                    self._write(base+0xac, [0]) # no select
-                
-                    self._write(base+0xb1, [0]) # rate        
-                    self._write(base+0xae, [0x64]) # freq mod
-                    self._write(base+0xb5, [4]) # select normal parms
+                    # Overwrite name of current mode with spaces, then display "FYBot"
+                    self._write(0x4180, [0x64])
+                    self._write(0x4070, [0x15])
+                    self._wait_ready(0x4070)
+                    for pos, char in enumerate('FYBot'):
+                        self._write(0x4180, [ord(char),pos+9])
+                        self._write(0x4070, [0x13])
+                        self._wait_ready(0x4070)
 
-                    self._write(base+0xb7, [0xc8]) # width mod value
-                    self._write(base+0xba, [0]) # width mod value        
-                    self._write(base+0xbe, [4]) # select normal parms
-
-                    self._write(base+0x9c, [255]) # ramp off
+                    for base in [A_BASE, B_BASE]:
+                        self._write(base+0xa8, [0,0]) # don't increment channel intensity
+                        self._write(base+0xa5, [128]) # intensity mod value = min
+                        self._write(base+0xac, [0]) # no select
                     
-                self._write(RUNNING_FLAG,[42]) # we're provisioned
+                        self._write(base+0xb1, [0]) # rate        
+                        self._write(base+0xae, [0x64]) # freq mod
+                        self._write(base+0xb5, [4]) # select normal parms
 
-        except Exception:
-            logger.exception("ET-312: Failed to provision")
-            raise
+                        self._write(base+0xb7, [0xc8]) # width mod value
+                        self._write(base+0xba, [0]) # width mod value        
+                        self._write(base+0xbe, [4]) # select normal parms
+
+                        self._write(base+0x9c, [255]) # ramp off
+                        
+                    self._write(RUNNING_FLAG,[42]) # we're provisioned
+
+            except Exception:
+                logger.exception("ET-312: Failed to provision")
+                raise
 
     def _read(self, address: int) -> int:
         try:
@@ -104,8 +109,8 @@ class TensET312:
     
     def set(self, channel: str, level: int) -> None:
         if level < 0 or level > 127:
-            logger.error(f"ET-312: Level out of bounds: {level}")
-            return
+            logger.warning(f"ET-312: Level out of bounds: {level}, clamping to 0-127")
+            level = max(0, min(127, level))
         if channel.lower() == "a":
             base = A_BASE
         elif channel.lower() == "b":
@@ -115,15 +120,21 @@ class TensET312:
             return
         
         level += 128 # Normalizing range
-        
-        self._write(base+0xac, [0]) # no select
-        self._write(base+0xa8, [0, 0])   # rate, direction
-        self._write(base+0xa5, [level])
+
+        with self._lock:
+            if not self.conn:
+                logger.error(f"ET-312: Not connected")
+                return
+            self._write(base+0xac, [0]) # no select
+            self._write(base+0xa8, [0, 0])   # rate, direction
+            self._write(base+0xa5, [level])
             
     def close(self) -> None:
-        if (self.conn):
-            self.conn.reset_key()
-            self.conn.close()
+        with self._lock:
+            if (self.conn):
+                self.conn.reset_key()
+                self.conn.close()
+                self.conn = None
  
     def __enter__(self) -> Self:
         return self

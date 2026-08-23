@@ -41,8 +41,11 @@ class HR8825:
           mode_pins[1]: self.mode_2,
           mode_pins[2]: self.mode_3
         }
+        self._closed = False
         
     def digital_write(self, pin, value):
+        if self._closed:
+            return
         if value:
           self.control_pin[pin].on()
         else:
@@ -50,6 +53,17 @@ class HR8825:
         
     def Stop(self):
         self.digital_write(self.enable_pin, 0)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self.Stop()
+        # Mark closed before tearing down pins so concurrent digital_write is a no-op.
+        self._closed = True
+        devices = list(self.control_pin.values())
+        self.control_pin.clear()
+        for device in devices:
+            device.close()
 
     def Configure_mode(self, microstep):
         j = 0
