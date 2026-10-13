@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 from loguru import logger
 
+from handlers.offset_range_handler import OffsetRangeHandler
 from outputs.fyapi_client import ControlRequest
 from program_elements.fy_random import FYRandom
 
@@ -20,7 +21,7 @@ class FYMercyPunish(FYRandom):
         mercy_mode: str,
         penalty_mode: str,
         punish_mode: str,
-        speed_range: tuple[int, int] = (50, 100),
+        speed_range: OffsetRangeHandler,
         duration_range: tuple[int, int] = (15, 60),
         included_patterns: list[str] | None = None,
         excluded_patterns: list[str] | None = None,

@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 
+from handlers.offset_range_handler import OffsetRangeHandler
 from outputs.fyapi_client import ControlRequest
 from program_elements.fy_random import FYRandom
 
@@ -16,11 +17,15 @@ def _patterns() -> dict[str, UUID]:
     return {"Alpha": PATTERN_A, "Beta": PATTERN_B, "Mercy": PATTERN_MERCY}
 
 
+def _speed_range(range: tuple[int, int] = (50, 100)) -> OffsetRangeHandler:
+    return OffsetRangeHandler("speed", range, 1, 100)
+
+
 @patch("program_elements.fy_random.FYHandler")
 def test_init_uses_all_patterns_when_included_not_specified(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
 
-    fy = FYRandom("user", "pass", "Device", excluded_patterns=["Mercy"])
+    fy = FYRandom("user", "pass", "Device", _speed_range(), excluded_patterns=["Mercy"])
 
     assert len(fy.random_patterns) == 2
     assert PATTERN_MERCY not in fy.random_patterns
@@ -30,7 +35,7 @@ def test_init_uses_all_patterns_when_included_not_specified(mock_fy_handler_cls:
 def test_init_uses_included_patterns(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
 
-    fy = FYRandom("user", "pass", "Device", included_patterns=["Alpha"])
+    fy = FYRandom("user", "pass", "Device", _speed_range(), included_patterns=["Alpha"])
 
     assert fy.random_patterns == [PATTERN_A]
 
@@ -40,7 +45,7 @@ def test_init_raises_when_included_pattern_missing(mock_fy_handler_cls: MagicMoc
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
 
     with pytest.raises(ValueError, match="Pattern\\(s\\) not found in Device: Missing"):
-        FYRandom("user", "pass", "Device", included_patterns=["Missing"])
+        FYRandom("user", "pass", "Device", _speed_range(), included_patterns=["Missing"])
 
 
 @patch("program_elements.fy_random.FYHandler")
@@ -48,13 +53,13 @@ def test_init_raises_when_random_pool_empty(mock_fy_handler_cls: MagicMock) -> N
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
 
     with pytest.raises(ValueError, match="No patterns available for random mode on Device"):
-        FYRandom("user", "pass", "Device", excluded_patterns=["Alpha", "Beta", "Mercy"])
+        FYRandom("user", "pass", "Device", _speed_range(), excluded_patterns=["Alpha", "Beta", "Mercy"])
 
 
 @patch("program_elements.fy_random.FYHandler")
 def test_random_control_request(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device", speed_range=(50, 100))
+    fy = FYRandom("user", "pass", "Device", _speed_range((50, 100)))
 
     with (
         patch("program_elements.fy_random.random.choice", return_value=PATTERN_B),
@@ -70,7 +75,7 @@ def test_random_control_request(mock_fy_handler_cls: MagicMock) -> None:
 @patch("program_elements.fy_random.FYHandler")
 def test_session_valid(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
     fy._session_id = 3
 
     assert fy._session_valid(3) is True
@@ -80,7 +85,7 @@ def test_session_valid(mock_fy_handler_cls: MagicMock) -> None:
 @patch("program_elements.fy_random.FYHandler")
 def test_dispatch_callback_skips_stale_session(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
     fy._session_id = 2
     fy._callback_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="test_fy_cb")
 
@@ -97,7 +102,7 @@ def test_dispatch_callback_skips_stale_session(mock_fy_handler_cls: MagicMock) -
 @patch("program_elements.fy_random.FYHandler")
 def test_dispatch_callback_runs_for_current_session(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
     fy._session_id = 2
     fy._callback_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="test_fy_cb")
 
@@ -119,7 +124,7 @@ def test_normal_mode_controls_device_and_stops(
     mock_handler = mock_fy_handler_cls.return_value
     mock_handler.patterns.return_value = _patterns()
     callback = MagicMock()
-    fy = FYRandom("user", "pass", "Device", mode_change_callback=callback)
+    fy = FYRandom("user", "pass", "Device", _speed_range(), mode_change_callback=callback)
     fy._ensure_callback_executor()
     fy._session_id = 1
 
@@ -152,7 +157,7 @@ def test_start_launches_daemon_thread(mock_fy_handler_cls: MagicMock, mock_threa
     mock_thread.is_alive.return_value = False
     mock_thread_cls.return_value = mock_thread
 
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
     fy.start()
 
     mock_thread_cls.assert_called_once()
@@ -164,7 +169,7 @@ def test_start_launches_daemon_thread(mock_fy_handler_cls: MagicMock, mock_threa
 @patch("program_elements.fy_random.FYHandler")
 def test_start_raises_when_thread_still_alive(mock_fy_handler_cls: MagicMock) -> None:
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
     fy.thread = MagicMock()
     fy.thread.is_alive.return_value = True
 
@@ -176,7 +181,7 @@ def test_start_raises_when_thread_still_alive(mock_fy_handler_cls: MagicMock) ->
 def test_stop_without_active_thread_stops_handler(mock_fy_handler_cls: MagicMock) -> None:
     mock_handler = mock_fy_handler_cls.return_value
     mock_handler.patterns.return_value = _patterns()
-    fy = FYRandom("user", "pass", "Device")
+    fy = FYRandom("user", "pass", "Device", _speed_range())
 
     fy.stop()
 

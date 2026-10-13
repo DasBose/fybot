@@ -8,6 +8,7 @@ from loguru import logger
 
 from handlers.callback_dispatch import dispatch_async
 from handlers.fy_handler import FYHandler
+from handlers.offset_range_handler import OffsetRangeHandler
 from outputs.fyapi_client import ControlRequest
 
 
@@ -21,7 +22,7 @@ class FYRandom:
         user: str,
         password: str,
         device_name: str,
-        speed_range: tuple[int, int] = (50, 100),
+        speed_range: OffsetRangeHandler,
         duration_range: tuple[int, int] = (15, 60),
         included_patterns: list[str] | None = None,
         excluded_patterns: list[str] | None = None,
@@ -154,5 +155,6 @@ class FYRandom:
         self.fy_handler.stop()
 
     def _random_control_request(self) -> ControlRequest:
-        return ControlRequest(pattern=random.choice(self.random_patterns), speed=round(random.uniform(self.speed_range[0]/100, self.speed_range[1]/100), 2), strokeLength=1.0, strokeMin=0.0)
+        min_speed, max_speed = self.speed_range.get_range()
+        return ControlRequest(pattern=random.choice(self.random_patterns), speed=round(random.uniform(min_speed/100, max_speed/100), 2), strokeLength=1.0, strokeMin=0.0)
         

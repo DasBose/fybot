@@ -9,6 +9,7 @@ from tkinter import ttk
 from program_elements.program import Program
 
 POLL_MS = 150
+_WHEEL_SEQUENCES = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 
 
 class IOTestPanel(ttk.Frame):
@@ -41,8 +42,47 @@ class IOTestPanel(ttk.Frame):
         ttk.Label(self, textvariable=self._status_var, style=self._label_style).pack(
             anchor="w", pady=(0, 8)
         )
-        self._body = ttk.Frame(self)
-        self._body.pack(fill="both", expand=True)
+
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True)
+
+        self._canvas = tk.Canvas(container, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(
+            container, orient="vertical", command=self._canvas.yview
+        )
+        self._body = ttk.Frame(self._canvas)
+
+        self._body.bind(
+            "<Configure>",
+            lambda _event: self._canvas.configure(
+                scrollregion=self._canvas.bbox("all")
+            ),
+        )
+        self._canvas_window = self._canvas.create_window(
+            (0, 0), window=self._body, anchor="nw"
+        )
+        self._canvas.configure(yscrollcommand=scrollbar.set)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+
+        self._canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        self._bind_wheel(self)
+
+    def _scroll_canvas(self, event: tk.Event) -> str:
+        if event.num == 5 or event.delta < 0:
+            self._canvas.yview_scroll(1, "units")
+        elif event.num == 4 or event.delta > 0:
+            self._canvas.yview_scroll(-1, "units")
+        return "break"
+
+    def _bind_wheel(self, widget: tk.Misc) -> None:
+        for sequence in _WHEEL_SEQUENCES:
+            widget.bind(sequence, self._scroll_canvas)
+        for child in widget.winfo_children():
+            self._bind_wheel(child)
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        self._canvas.itemconfigure(self._canvas_window, width=event.width)
 
     def attach(self, program: Program) -> None:
         self.detach()
@@ -85,6 +125,7 @@ class IOTestPanel(ttk.Frame):
 
     def _build_controls(self, program: Program) -> None:
         self._clear_body()
+        self._canvas.yview_moveto(0)
         row = 0
 
         if program.boolean_outputs:
@@ -121,6 +162,8 @@ class IOTestPanel(ttk.Frame):
                 text="No IO channels configured for this program.",
                 style=self._label_style,
             ).grid(row=0, column=0, sticky="w")
+
+        self._bind_wheel(self._body)
 
     def _add_boolean_row(self, row: int, key: str, output: Any) -> int:
         ttk.Label(self._body, text=output.name, style=self._label_style).grid(

@@ -10,6 +10,7 @@ from loguru import logger
 from handlers.boolean_handler import BooleanHandler
 from handlers.button_handler import ButtonHandler
 from handlers.level_handler import LevelHandler
+from handlers.offset_range_handler import OffsetRangeHandler
 from outputs.pumps.pump_HR8825 import PumpHR8825
 from outputs.tens.tens_et312 import TensET312
 from program_elements.fy_mercy_punish import FYMercyPunish
@@ -33,10 +34,10 @@ FY_USER = _local_config["FY_USER"]
 FY_PASSWORD = _local_config["FY_PASSWORD"]
 FY_DEVICE_NAME = _local_config["FY_DEVICE_NAME"]
 
-FYAUX1 = 14
-FYAUX2 = 10
-BUTTON_1 = 8
-BUTTON_2 = 5
+FYAUX1 = 6
+FYAUX2 = 26
+BUTTON_1 = 23
+BUTTON_2 = 10
 
 class RiskyMercy(Program):
     """
@@ -79,6 +80,8 @@ class RiskyMercy(Program):
         "random_shock_length_range": RangeParameter(name="Shock length range on change of random mode (seconds)", min_value=0, max_value=15, default_value=(1, 8)),
         "progressive_tens_offset_normal_increment": IntegerParameter(name="Progressive tens mode switch increment (1-10)", min_value=1, max_value=10, default_value=2),
         "progressive_tens_offset_punishment_increment": IntegerParameter(name="Progressive tens punishment increment (1-10)", min_value=1, max_value=10, default_value=8),
+        "progressive_speed_offset_normal_increment": IntegerParameter(name="Progressive speed mode switch increment (1-10)", min_value=1, max_value=10, default_value=1),
+        "progressive_speed_offset_punishment_increment": IntegerParameter(name="Progressive speed punishment increment (1-10)", min_value=1, max_value=10, default_value=5),
     }
 
     def __init__(self):
@@ -156,6 +159,7 @@ class RiskyMercy(Program):
             LevelHandler("tens_handler_a", partial(tens_unit.set, "a")) as tens_handler_a,
             LevelHandler("tens_handler_b", partial(tens_unit.set, "b")) as tens_handler_b,
         ):
+            normal_speed_range_handler = OffsetRangeHandler("normal_speed_range", self.get_parameter("speed_range"), 1, 100)
             if self.get_parameter("pulsed_tens_channel") == "A":
                 random_pulsed_tens = RandomPulsedTens([tens_handler_a])
                 random_solid_tens = RandomSolidTens([tens_handler_a])
@@ -181,16 +185,17 @@ class RiskyMercy(Program):
             
             def mercy_callback() -> None:
                 nonlocal progressive_tens_offset
+                progressive_tens_offset = 0
                 random_pulsed_tens.set_range(self.get_parameter("default_pulsed_tens_range"))
                 aux_driven_solid_tens.set_range(self.get_parameter("default_aux_tens_range"))
                 random_pulsed_tens.off()
                 random_solid_tens.off()
                 aux_driven_solid_tens.off()
                 lube_pump_handler.set(self.get_parameter("mercy_lube_pump_duration"))
-                progressive_tens_offset = 0
                 aux_driven_solid_tens.set_offset(progressive_tens_offset)
                 random_pulsed_tens.set_offset(progressive_tens_offset)
                 random_solid_tens.set_offset(progressive_tens_offset)
+                normal_speed_range_handler.set_offset(0)
 
             def penalty_callback() -> None:
                 random_pulsed_tens.set_range(self.get_parameter("penalty_pulsed_tens_range"))
@@ -205,6 +210,7 @@ class RiskyMercy(Program):
                 aux_driven_solid_tens.set_offset(progressive_tens_offset)
                 random_pulsed_tens.set_offset(progressive_tens_offset)
                 random_solid_tens.set_offset(progressive_tens_offset)
+                normal_speed_range_handler.increment_offset(self.get_parameter("progressive_speed_offset_punishment_increment"))
                 hot_sauce_pump_handler.set(self.get_parameter("punishment_hot_sauce_pump_duration"))
                 random_pulsed_tens.set_range(self.get_parameter("punishment_pulsed_tens_range"))
                 random_pulsed_tens.set_on_duration(self.get_parameter("punishment_pulsed_tens_on_duration"))
@@ -226,6 +232,7 @@ class RiskyMercy(Program):
                 aux_driven_solid_tens.set_offset(progressive_tens_offset)
                 random_pulsed_tens.set_offset(progressive_tens_offset)
                 random_solid_tens.set_offset(progressive_tens_offset)
+                normal_speed_range_handler.increment_offset(self.get_parameter("progressive_speed_offset_normal_increment"))
                 shock_length = random.randint(self.get_parameter("random_shock_length_range")[0], self.get_parameter("random_shock_length_range")[1])
                 lube_pump_handler.set(self.get_parameter("random_lube_pump_duration"))
                 random_solid_tens.on(shock_length + 1)
@@ -237,7 +244,7 @@ class RiskyMercy(Program):
                 mercy_mode=self.get_parameter("mercy_pattern"),
                 penalty_mode=self.get_parameter("penalty_pattern"),
                 punish_mode=self.get_parameter("punish_pattern"),
-                speed_range=self.get_parameter("speed_range"),
+                speed_range=normal_speed_range_handler,
                 duration_range=self.get_parameter("duration_range"),
                 mercy_mode_callback=mercy_callback,
                 penalty_mode_callback=penalty_callback,
@@ -320,7 +327,7 @@ class RiskyMercy(Program):
                 ButtonHandler(BUTTON_1, on_start_pressed, lambda: None),
             ):
                 try:
-                    logger.info("Waiting for start button (GPIO 14)...")
+                    logger.info(f"Waiting for start button (GPIO {BUTTON_1})...")
                     self.main_stop_event.wait()
                 except KeyboardInterrupt:
                     logger.info("Keyboard interrupt, exiting...")

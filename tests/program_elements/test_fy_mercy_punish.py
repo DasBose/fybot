@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 
+from handlers.offset_range_handler import OffsetRangeHandler
 from outputs.fyapi_client import ControlRequest
 from program_elements.fy_mercy_punish import FYMercyPunish
 
@@ -11,6 +12,10 @@ PATTERN_B = UUID("00000000-0000-0000-0000-000000000002")
 PATTERN_MERCY = UUID("00000000-0000-0000-0000-000000000003")
 PATTERN_PENALTY = UUID("00000000-0000-0000-0000-000000000004")
 PATTERN_PUNISH = UUID("00000000-0000-0000-0000-000000000005")
+
+
+def _speed_range() -> OffsetRangeHandler:
+    return OffsetRangeHandler("speed", (50, 100), 1, 100)
 
 
 def _patterns() -> dict[str, UUID]:
@@ -40,6 +45,7 @@ def test_init_raises_when_special_mode_missing(mock_fy_handler_cls: MagicMock) -
             mercy_mode="Mercy",
             penalty_mode="Penalty",
             punish_mode="Punish",
+            speed_range=_speed_range(),
         )
 
 
@@ -61,6 +67,7 @@ def test_init_raises_when_special_mode_missing_dedupes_names(
             mercy_mode="Mercy",
             penalty_mode="Missing",
             punish_mode="Missing",
+            speed_range=_speed_range(),
         )
 
 
@@ -75,6 +82,7 @@ def test_init_excludes_special_modes_from_random_pool(mock_fy_handler_cls: Magic
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
     )
 
     assert PATTERN_MERCY not in fy.random_patterns
@@ -94,6 +102,7 @@ def test_mercy_and_penalty_runs_modes_in_order(mock_fy_handler_cls: MagicMock) -
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
     )
     fy._session_id = 1
     fy.flags["normal_running"].set()
@@ -129,6 +138,7 @@ def test_mercy_and_penalty_aborts_on_stale_session(mock_fy_handler_cls: MagicMoc
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
         normal_mode_callback=normal_callback,
     )
     fy._session_id = 2
@@ -153,6 +163,7 @@ def test_punish_runs_punish_mode(mock_fy_handler_cls: MagicMock) -> None:
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
     )
     fy._session_id = 3
     fy.flags["normal_running"].set()
@@ -188,6 +199,7 @@ def test_mercy_and_penalty_starts_background_thread(
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
     )
     fy._session_id = 4
 
@@ -216,6 +228,7 @@ def test_punish_starts_background_thread(
         mercy_mode="Mercy",
         penalty_mode="Penalty",
         punish_mode="Punish",
+            speed_range=_speed_range(),
     )
     fy._session_id = 7
 
