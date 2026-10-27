@@ -29,11 +29,17 @@ class ButtonHandler:
 
         def logged_pressed() -> None:
             logger.info(f"GPIO {self.button_pin}: pressed")
-            on_pressed()
+            try:
+                on_pressed()
+            except Exception:
+                logger.exception(f"GPIO {self.button_pin}: press callback failed")
 
         def logged_released() -> None:
             logger.info(f"GPIO {self.button_pin}: released")
-            on_released()
+            try:
+                on_released()
+            except Exception:
+                logger.exception(f"GPIO {self.button_pin}: release callback failed")
 
         self.button.when_pressed = partial(dispatch_async, self.executor, logged_pressed)
         self.button.when_released = partial(dispatch_async, self.executor, logged_released)

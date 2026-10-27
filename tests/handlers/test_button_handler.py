@@ -58,6 +58,27 @@ def test_button_press_invokes_callback(
 
 @patch("handlers.button_handler.ThreadPoolExecutor")
 @patch("handlers.button_handler.Button")
+def test_button_press_logs_callback_errors(
+    mock_button_cls: MagicMock,
+    mock_executor_cls: MagicMock,
+) -> None:
+    mock_button = MagicMock()
+    mock_button_cls.return_value = mock_button
+    mock_executor = MagicMock(spec=ThreadPoolExecutor)
+    mock_executor_cls.return_value = mock_executor
+
+    on_pressed = MagicMock(side_effect=RuntimeError("boom"))
+    ButtonHandler(10, on_pressed, MagicMock())
+
+    press_dispatch = mock_button.when_pressed
+    press_dispatch()
+    submitted_fn = mock_executor.submit.call_args[0][0]
+    submitted_fn()
+    on_pressed.assert_called_once()
+
+
+@patch("handlers.button_handler.ThreadPoolExecutor")
+@patch("handlers.button_handler.Button")
 def test_context_manager_closes_button(
     mock_button_cls: MagicMock,
     mock_executor_cls: MagicMock,
