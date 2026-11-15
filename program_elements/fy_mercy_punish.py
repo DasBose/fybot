@@ -3,8 +3,8 @@ from collections.abc import Callable
 
 from loguru import logger
 
+from handlers.fy_handler import ControlRequest
 from handlers.offset_range_handler import OffsetRangeHandler
-from outputs.fyapi_client import ControlRequest
 from program_elements.fy_random import FYRandom
 
 
@@ -15,8 +15,7 @@ class FYMercyPunish(FYRandom):
 
     def __init__(
         self,
-        user: str,
-        password: str,
+        token: str,
         device_name: str,
         mercy_mode: str,
         penalty_mode: str,
@@ -34,8 +33,7 @@ class FYMercyPunish(FYRandom):
         excluded_modes = [mercy_mode, penalty_mode, punish_mode]
         parent_excluded_patterns = list(excluded_patterns or []) + excluded_modes
         super().__init__(
-            user,
-            password,
+            token,
             device_name,
             speed_range,
             duration_range,

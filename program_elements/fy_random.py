@@ -7,9 +7,8 @@ from time import sleep
 from loguru import logger
 
 from handlers.callback_dispatch import dispatch_async
-from handlers.fy_handler import FYHandler
+from handlers.fy_handler import ControlRequest, FYHandler
 from handlers.offset_range_handler import OffsetRangeHandler
-from outputs.fyapi_client import ControlRequest
 
 
 class FYRandom:
@@ -19,8 +18,7 @@ class FYRandom:
 
     def __init__(
         self,
-        user: str,
-        password: str,
+        token: str,
         device_name: str,
         speed_range: OffsetRangeHandler,
         duration_range: tuple[int, int] = (15, 60),
@@ -28,10 +26,9 @@ class FYRandom:
         excluded_patterns: list[str] | None = None,
         mode_change_callback: Callable[[], None] | None = None,
     ):
-        self.user = user
-        self.password = password
+        self.token = token
         self.device_name = device_name
-        self.fy_handler = FYHandler(user, password, device_name)
+        self.fy_handler = FYHandler(token, device_name)
         self.speed_range = speed_range
         self.duration_range = duration_range
         self.mode_change_callback = mode_change_callback

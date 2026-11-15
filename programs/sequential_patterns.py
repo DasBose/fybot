@@ -4,8 +4,7 @@ from pathlib import Path
 import yaml
 from loguru import logger
 
-from handlers.fy_handler import FYHandler
-from outputs.fyapi_client import ControlRequest
+from handlers.fy_handler import ControlRequest, FYHandler
 from program_elements.program import (
     StringParameter,
     IntegerParameter,
@@ -15,8 +14,7 @@ from program_elements.program import (
 
 _ROOT = Path(__file__).resolve().parents[1]
 _local_config = yaml.safe_load((_ROOT / "local_config.yaml").read_text(encoding="utf-8"))
-FY_USER = _local_config["FY_USER"]
-FY_PASSWORD = _local_config["FY_PASSWORD"]
+FY_TOKEN = _local_config["FY_TOKEN"]
 FY_DEVICE_NAME = _local_config["FY_DEVICE_NAME"]
 
 class SequentialPatterns(Program):
@@ -39,7 +37,7 @@ class SequentialPatterns(Program):
     def run(self) -> None:
         pattern_list = self.get_parameter("pattern_list").split(",")
         pattern_list = [pattern.strip() for pattern in pattern_list]
-        fy_handler = FYHandler(FY_USER, FY_PASSWORD, FY_DEVICE_NAME)
+        fy_handler = FYHandler(FY_TOKEN, FY_DEVICE_NAME)
         try:
             try:
                 pattern_ids = [fy_handler.patterns()[pattern] for pattern in pattern_list]
@@ -68,5 +66,8 @@ class SequentialPatterns(Program):
                         logger.info("Stop event received, stopping...")
                         break
         finally:
-            fy_handler.stop()
+            try:
+                fy_handler.stop()
+            finally:
+                fy_handler.close()
             logger.info("Program stopped")

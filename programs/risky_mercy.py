@@ -30,8 +30,7 @@ from program_elements.random_solid_tens import RandomSolidTens
 
 _ROOT = Path(__file__).resolve().parents[1]
 _local_config = yaml.safe_load((_ROOT / "local_config.yaml").read_text(encoding="utf-8"))
-FY_USER = _local_config["FY_USER"]
-FY_PASSWORD = _local_config["FY_PASSWORD"]
+FY_TOKEN = _local_config["FY_TOKEN"]
 FY_DEVICE_NAME = _local_config["FY_DEVICE_NAME"]
 
 FYAUX1 = 6
@@ -238,8 +237,7 @@ class RiskyMercy(Program):
                 random_solid_tens.on(shock_length + 1)
 
             fy_mercy_punish = FYMercyPunish(
-                user=FY_USER,
-                password=FY_PASSWORD,
+                token=FY_TOKEN,
                 device_name=FY_DEVICE_NAME,
                 mercy_mode=self.get_parameter("mercy_pattern"),
                 penalty_mode=self.get_parameter("penalty_pattern"),

@@ -1,3 +1,2 @@
-FY_USER: "you@example.com"
-FY_PASSWORD: "your-password"
+FY_TOKEN: "fy_your-personal-api-token"
 FY_DEVICE_NAME: "YourDeviceName"
