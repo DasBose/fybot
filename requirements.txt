@@ -5,3 +5,4 @@ loguru>=0.7
 pyserial==3.5
 PyYAML>=6.0
 requests>=2.31.0
+fuckyeah>=0.1.0

@@ -3,8 +3,8 @@ from uuid import UUID
 
 import pytest
 
+from handlers.fy_handler import ControlRequest
 from handlers.offset_range_handler import OffsetRangeHandler
-from outputs.fyapi_client import ControlRequest
 from program_elements.fy_mercy_punish import FYMercyPunish
 
 PATTERN_A = UUID("00000000-0000-0000-0000-000000000001")
@@ -39,8 +39,7 @@ def test_init_raises_when_special_mode_missing(mock_fy_handler_cls: MagicMock) -
 
     with pytest.raises(ValueError, match="Pattern\\(s\\) not found in Device: Punish"):
         FYMercyPunish(
-            "user",
-            "pass",
+            "fy_test",
             "Device",
             mercy_mode="Mercy",
             penalty_mode="Penalty",
@@ -61,8 +60,7 @@ def test_init_raises_when_special_mode_missing_dedupes_names(
 
     with pytest.raises(ValueError, match="Pattern\\(s\\) not found in Device: Missing"):
         FYMercyPunish(
-            "user",
-            "pass",
+            "fy_test",
             "Device",
             mercy_mode="Mercy",
             penalty_mode="Missing",
@@ -76,8 +74,7 @@ def test_init_excludes_special_modes_from_random_pool(mock_fy_handler_cls: Magic
     mock_fy_handler_cls.return_value.patterns.return_value = _patterns()
 
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
@@ -96,8 +93,7 @@ def test_mercy_and_penalty_runs_modes_in_order(mock_fy_handler_cls: MagicMock) -
     mock_handler = mock_fy_handler_cls.return_value
     mock_handler.patterns.return_value = _patterns()
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
@@ -132,8 +128,7 @@ def test_mercy_and_penalty_aborts_on_stale_session(mock_fy_handler_cls: MagicMoc
     mock_handler.patterns.return_value = _patterns()
     normal_callback = MagicMock()
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
@@ -157,8 +152,7 @@ def test_punish_runs_punish_mode(mock_fy_handler_cls: MagicMock) -> None:
     mock_handler = mock_fy_handler_cls.return_value
     mock_handler.patterns.return_value = _patterns()
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
@@ -193,8 +187,7 @@ def test_mercy_and_penalty_starts_background_thread(
     mock_thread_cls.return_value = mock_thread
 
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
@@ -222,8 +215,7 @@ def test_punish_starts_background_thread(
     mock_thread_cls.return_value = mock_thread
 
     fy = FYMercyPunish(
-        "user",
-        "pass",
+        "fy_test",
         "Device",
         mercy_mode="Mercy",
         penalty_mode="Penalty",
